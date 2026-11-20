@@ -1,0 +1,112 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>MateBook Overheat — Challenge Mode</title>
+<style>
+:root{color-scheme:dark;--bg:#0c1726;--panel:#152438;--line:#34445a;--muted:#9aabc0;--cyan:#22d3ee}
+*{box-sizing:border-box}body{margin:0;padding:22px;background:linear-gradient(135deg,#091321,#14283e);color:#f1f5f9;font:15px system-ui,Segoe UI,sans-serif}
+main{max-width:850px;margin:auto}.top{display:flex;justify-content:space-between;align-items:center;gap:12px;flex-wrap:wrap;margin-bottom:14px}
+h1{font-size:clamp(22px,4vw,32px);margin:0;font-weight:900;letter-spacing:-1px}h1 span{color:var(--cyan)}
+.panel{background:#132238;border:1px solid var(--line);border-radius:13px;padding:13px}
+.stats{display:grid;grid-template-columns:repeat(3,1fr);gap:9px;margin-bottom:10px}.label{font-size:11px;color:var(--muted);font-weight:700}.value{font-size:25px;font-weight:900;font-variant-numeric:tabular-nums}
+.mission{margin-bottom:10px}.missionhead{display:flex;justify-content:space-between;gap:10px;flex-wrap:wrap}.muted{color:var(--muted);font-size:13px}
+.bar{height:11px;background:#26374c;border-radius:20px;overflow:hidden;margin:7px 0}.fill{height:100%;width:0%;border-radius:20px;transition:width .15s}
+canvas{width:100%;height:auto;display:block;touch-action:manipulation;cursor:crosshair;border-radius:12px;border:1px solid var(--line);margin:10px 0}
+.controls{display:grid;grid-template-columns:repeat(2,1fr);gap:9px;margin:10px 0}
+button{border:1px solid var(--line);background:#1c2c41;color:white;padding:12px 10px;border-radius:10px;font-weight:800;cursor:pointer}
+button:hover:not(:disabled){filter:brightness(1.2)}button:disabled{opacity:.4;cursor:not-allowed}.primary{background:#2563eb;border-color:#2563eb}.green{background:#166534;border-color:#16a34a}.cyan{background:#087e91;border-color:#0891b2}
+.levels{display:grid;grid-template-columns:repeat(2,1fr);gap:8px;margin-top:10px}.level{text-align:left;background:#101d30}.level.selected{border:2px solid var(--cyan)}.level.done{border-color:#16a34a}
+.message{text-align:center;padding:13px;background:#1a2b40;border-radius:11px;font-weight:750;margin-top:10px}
+@media(min-width:650px){.levels{grid-template-columns:repeat(5,1fr)}}@media(max-width:430px){body{padding:12px}.value{font-size:20px}.stats{gap:6px}.panel{padding:10px}}
+</style>
+</head>
+<body>
+<main>
+<div class="top"><div><h1>MATEBOOK <span>OVERHEAT</span></h1><div class="muted">CAMPAIGN • CHALLENGE EDITION</div></div><b>🏆 10 LEVELS</b></div>
+<div class="stats">
+ <div class="panel"><div class="label">LEVEL</div><div class="value" id="levelStat">1/10</div></div>
+ <div class="panel"><div class="label">TEMPERATURE</div><div class="value" id="tempStat">42°C</div></div>
+ <div class="panel"><div class="label">BATTERY</div><div class="value" id="batteryStat">65%</div></div>
+</div>
+<section class="panel mission">
+ <div class="missionhead"><b id="missionName">LEVEL 1: LAPTOP BASICS</b><b id="stars">☆☆☆</b></div>
+ <p class="muted" id="missionDesc">Survive 20 seconds. Reach 45% battery.</p>
+ <div class="missionhead muted"><span>MISSION PROGRESS</span><b id="progressText">0 / 20 seconds</b></div>
+ <div class="bar"><div class="fill" id="progressBar" style="background:var(--cyan)"></div></div>
+</section>
+<div class="stats">
+ <div class="panel"><div class="label">TIME</div><div class="value" id="timeStat">0s</div></div>
+ <div class="panel"><div class="label">APPS CLOSED</div><div class="value" id="appsStat">0</div></div>
+ <div class="panel"><div class="label">FAN USES</div><div class="value" id="fanStat">2</div></div>
+</div>
+<section class="panel">
+ <div class="missionhead"><b>🌡️ Temperature</b><b id="thermalLabel">SAFE</b></div><div class="bar"><div class="fill" id="thermalBar" style="background:#22c55e"></div></div>
+ <div class="missionhead muted"><span>0°C</span><span>100°C — CRITICAL</span></div>
+ <div class="missionhead" style="margin-top:14px"><b>🔋 Battery</b><b id="batteryLabel">65%</b></div><div class="bar"><div class="fill" id="batteryBar" style="background:#22c55e"></div></div>
+</section>
+<canvas id="game" width="700" height="390" aria-label="Laptop screen with rogue app popups. Click popups to close them."></canvas>
+<div class="controls"><button id="charger" class="green">⚡ CHARGER ON</button><button id="fan" class="cyan">🌀 FAN COOLDOWN</button></div>
+<div class="missionhead muted"><span id="chargerNote">65W charging active</span><span id="fanNote">2 fan charges available</span></div>
+<div class="controls"><button id="start" class="primary">▶ START CHALLENGE</button><button id="retry">↻ RETRY LEVEL</button></div>
+<section class="panel"><div class="missionhead"><b>🗺️ CAMPAIGN MAP</b><span class="muted" id="unlocked">1/10 unlocked</span></div><div class="levels" id="levels"></div></section>
+<div class="message" id="message">Select a level and press START CHALLENGE!</div>
+<p class="muted">How to play: Click rogue app popups on the laptop screen. Toggle the 65W charger to balance battery and heat. Use limited fan charges for a quick cooldown. Complete each mission to unlock the next level.</p>
+</main>
+<script>
+(()=>{
+const $=id=>document.getElementById(id),canvas=$('game'),ctx=canvas.getContext('2d');
+const levels=[
+['Laptop Basics','Survive 20 seconds. Reach 45% battery.',20,45,80,2,0],
+['The Heat Begins','Survive 25 seconds. Reach 50% battery.',25,50,78,2,1],
+['App Attack','Survive 30 seconds. Close 4 rogue apps.',30,50,80,2,2],
+['Battery Crisis','Survive 35 seconds. Reach 65% battery.',35,65,78,2,2],
+['65W Madness','Survive 40 seconds. Reach 70% battery.',40,70,82,2,3],
+['Overheat Storm','Survive 45 seconds. Close 7 apps.',45,55,78,2,3],
+['Pop-up Apocalypse','Survive 50 seconds. Close 10 apps.',50,60,80,2,4],
+['Extreme Charging','Survive 55 seconds. Reach 85% battery.',55,85,78,2,4],
+['Thermal Nightmare','Survive 60 seconds. Close 12 apps.',60,65,75,2,5],
+['MateBook Master','Survive 75 seconds. Reach 90% battery and close 15 apps.',75,90,80,2,6]
+];
+let unlocked=1,ratings=Array(10).fill(0),level=0,running=false,ended=false,won=false;
+let temp=42,battery=65,time=0,apps=0,fan=2,fanTime=0,fanLock=0,charger=true,last=0,spawn=2,popups=[];
+const names=['CPU OVERLOAD','UNKNOWN APP','RAM CLEANER','SYSTEM ALERT','VIRUS WARNING','FREE BOOST','BACKGROUND TASK','GPU BOOSTER'];
+const colors=['#ef4444','#a855f7','#0284c7','#ea580c','#ca8a04'];
+function round(x,y,w,h,r,c){ctx.fillStyle=c;ctx.beginPath();ctx.roundRect(x,y,w,h,r);ctx.fill()}
+function txt(t,x,y,s,c='#fff',weight='600',align='left'){ctx.fillStyle=c;ctx.font=weight+' '+s+'px system-ui';ctx.textAlign=align;ctx.fillText(t,x,y)}
+function draw(){
+ ctx.clearRect(0,0,700,390);let bg=ctx.createLinearGradient(0,0,0,390);bg.addColorStop(0,'#152b42');bg.addColorStop(1,'#080f1b');ctx.fillStyle=bg;ctx.fillRect(0,0,700,390);
+ txt('MATEBOOK SYSTEM MANAGER',20,25,12,'#93c5fd','800');txt('65W POWER CONTROL',680,25,11,'#67e8f9','700','right');
+ round(80,43,540,280,16,'#64748b');round(88,51,524,264,10,'#07111e');round(98,61,504,244,6,'#10243a');
+ txt('MATEBOOK',350,91,16,'#cbd5e1','900','center');txt('THERMAL CONTROL CENTER',350,123,12,'#93c5fd','700','center');
+ round(140,143,420,95,9,'#081827');txt('CPU TEMPERATURE',160,166,11,'#94a3b8');round(160,179,380,13,5,'#26374c');
+ round(160,179,380*Math.min(1,temp/100),13,5,temp>80?'#ef4444':temp>60?'#f59e0b':'#22c55e');
+ txt(Math.round(temp)+'°C',540,168,12,'#fff','800','right');txt(charger?'⚡ CHARGER CONNECTED':'🔌 RUNNING ON BATTERY',350,217,13,charger?'#86efac':'#fca5a5','800','center');txt('BATTERY  '+Math.round(battery)+'%',350,257,14,'#67e8f9','800','center');
+ ctx.fillStyle='#94a3b8';ctx.beginPath();ctx.moveTo(40,324);ctx.lineTo(660,324);ctx.lineTo(605,348);ctx.lineTo(95,348);ctx.closePath();ctx.fill();round(290,327,120,5,3,'#475569');txt('MATEBOOK',350,342,9,'#334155','800','center');
+ popups.forEach(p=>{round(p.x,p.y,p.w,p.h,8,'#e2e8f0');round(p.x,p.y,p.w,22,7,p.color);txt(p.name,p.x+8,p.y+15,9,'#fff','800');txt('×',p.x+p.w-12,p.y+16,15,'#fff','900','center');txt(p.desc,p.x+8,p.y+41,10,'#273449','700');round(p.x+8,p.y+51,p.w-16,16,4,'#cbd5e1');txt('CLICK TO CLOSE',p.x+p.w/2,p.y+63,8,'#1e293b','800','center')});
+ if(!running&&!ended){ctx.fillStyle='rgba(0,0,0,.55)';ctx.fillRect(98,61,504,244);txt('READY FOR THE CHALLENGE?',350,160,21,'#fff','900','center');txt('Press START CHALLENGE',350,195,14,'#67e8f9','700','center')}
+ if(ended){ctx.fillStyle='rgba(0,0,0,.78)';ctx.fillRect(98,61,504,244);txt(won?'LEVEL COMPLETED!':'CHALLENGE FAILED',350,143,24,won?'#4ade80':'#f87171','900','center');txt(won?'⭐'.repeat(ratings[level])+'☆'.repeat(3-ratings[level]):'SYSTEM SHUTDOWN',350,180,22,'#facc15','800','center');txt(won?'Next level unlocked!':'Try again and beat this level!',350,216,14,'#fff','700','center');txt('Time: '+Math.floor(time)+'s  •  Apps: '+apps,350,249,12,'#cbd5e1','600','center');txt(won?'Select the next level below':'Press RETRY LEVEL',350,276,12,'#67e8f9','700','center')}
+}
+function update(){
+ const L=levels[level];$('levelStat').textContent=(level+1)+'/10';$('tempStat').textContent=Math.round(temp)+'°C';$('batteryStat').textContent=Math.round(battery)+'%';$('timeStat').textContent=Math.floor(time)+'s';$('appsStat').textContent=apps;$('fanStat').textContent=fan;
+ $('missionName').textContent='LEVEL '+(level+1)+': '+L[0].toUpperCase();$('missionDesc').textContent=L[1];$('stars').textContent='⭐'.repeat(ratings[level])+'☆'.repeat(3-ratings[level]);
+ $('progressText').textContent=Math.min(Math.floor(time),L[2])+' / '+L[2]+' seconds';$('progressBar').style.width=Math.min(100,time/L[2]*100)+'%';
+ $('thermalBar').style.width=Math.min(100,temp)+'%';$('thermalBar').style.background=temp>=80?'#ef4444':temp>=60?'#f59e0b':'#22c55e';$('thermalLabel').textContent=temp>=L[4]-5?'DANGER':temp>=60?'HOT':'SAFE';
+ $('batteryLabel').textContent=Math.round(battery)+'%';$('batteryBar').style.width=battery+'%';$('batteryBar').style.background=battery<20?'#ef4444':'#22c55e';
+ $('charger').textContent=charger?'⚡ CHARGER ON':'🔌 CHARGER OFF';$('charger').className=charger?'green':'';$('chargerNote').textContent=charger?'65W charging active':'Battery power only';$('fanNote').textContent=fanLock>0?'Fan cooldown: '+Math.ceil(fanLock)+'s':fan+' fan charges available';
+ $('fan').disabled=!running||fan<=0||fanLock>0;$('charger').disabled=!running;$('start').disabled=running;$('start').textContent=running?'CHALLENGE ACTIVE':'▶ START CHALLENGE';$('unlocked').textContent=unlocked+'/10 unlocked';
+}
+function renderLevels(){
+ $('levels').innerHTML='';levels.forEach((L,i)=>{let b=document.createElement('button');b.className='level'+(i===level?' selected':'')+(ratings[i]?' done':'');b.disabled=i>=unlocked||running;b.innerHTML='<div class="label">LEVEL '+(i+1)+'</div><b>'+(i>=unlocked?'🔒 ':ratings[i]?'🏆 ':'')+L[0]+'</b><div style="color:#facc15;margin-top:4px">'+('★'.repeat(ratings[i])+'☆'.repeat(3-ratings[i]))+'</div>';b.onclick=()=>{level=i;reset()};$('levels').appendChild(b)})}
+function reset(){running=false;ended=false;won=false;temp=42;battery=65;time=0;apps=0;fan=levels[level][5];fanTime=0;fanLock=0;charger=true;last=0;spawn=2;popups=[];$('message').textContent='Ready! Complete the mission to unlock the next level.';update();draw();renderLevels()}
+function start(){if(running)return;if(ended)reset();running=true;ended=false;last=0;$('message').textContent='🔥 Challenge started! Keep your MateBook alive!';update();renderLevels();requestAnimationFrame(loop)}
+function finish(success){running=false;ended=true;won=success;if(success){let L=levels[level],rating=3;if(temp>L[4]-12||apps<L[6]+2)rating=2;if(temp>L[4]-5||apps<L[6])rating=1;ratings[level]=Math.max(ratings[level],rating);unlocked=Math.max(unlocked,Math.min(10,level+2));$('message').textContent=level===9?'🏆 CAMPAIGN COMPLETE! YOU ARE THE MATEBOOK MASTER!':'🎉 Mission complete! Level '+(level+2)+' unlocked!'}else $('message').textContent=temp>=100?'🔥 Your laptop overheated!':'🔋 Battery depleted! Challenge failed.';update();renderLevels();draw()}
+function loop(ts){if(!running)return;if(!last)last=ts;let dt=Math.min(.05,(ts-last)/1000);last=ts;let L=levels[level];time+=dt;temp+=(charger?1.45:.12)*dt+popups.length*.29*dt-.48*dt;battery+=(charger?1.6:-1)*dt;battery=Math.max(0,Math.min(100,battery));if(fanTime>0){temp-=5.5*dt;fanTime=Math.max(0,fanTime-dt)}if(fanLock>0)fanLock=Math.max(0,fanLock-dt);temp=Math.max(20,Math.min(110,temp));spawn-=dt;if(spawn<=0&&popups.length<5){popups.push({x:115+Math.random()*400,y:120+Math.random()*110,w:155,h:75,name:names[Math.floor(Math.random()*names.length)],color:colors[Math.floor(Math.random()*colors.length)],desc:'System resource overload!'});spawn=Math.max(1.3,4.8-time*.025)+Math.random()*1.4}if(temp>=100||battery<=0){finish(false);return}if(time>=L[2]){finish(temp<L[4]&&battery>=L[3]&&apps>=L[6]);return}update();draw();requestAnimationFrame(loop)}
+canvas.addEventListener('pointerdown',e=>{if(!running)return;let r=canvas.getBoundingClientRect(),x=(e.clientX-r.left)*700/r.width,y=(e.clientY-r.top)*390/r.height;for(let i=popups.length-1;i>=0;i--){let p=popups[i];if(x>=p.x&&x<=p.x+p.w&&y>=p.y&&y<=p.y+p.h){popups.splice(i,1);apps++;temp=Math.max(20,temp-1.5);$('message').textContent='✅ Rogue app closed! Keep going!';update();draw();break}}});
+$('charger').onclick=()=>{if(running){charger=!charger;update();draw()}};$('fan').onclick=()=>{if(running&&fan>0&&fanLock<=0){fan--;fanTime=3;fanLock=5;temp=Math.max(20,temp-8);$('message').textContent='🌀 Cooling boost activated!';update();draw()}};
+$('start').onclick=start;$('retry').onclick=reset;reset();
+})();
+</script>
+</body>
+</html>
